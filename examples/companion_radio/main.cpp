@@ -37,9 +37,16 @@ static uint32_t _atoi(const char* sp) {
 #ifdef ESP32
   #ifdef WIFI_SSID
     #include <helpers/esp32/SerialWifiInterface.h>
+    #include <WiFiMulti.h>
     SerialWifiInterface serial_interface;
     #ifndef TCP_PORT
       #define TCP_PORT 5000
+    #endif
+    #if defined(WIFI_SSID_2) && !defined(WIFI_PWD_2)
+      #error "WIFI_PWD_2 must be defined when WIFI_SSID_2 is defined"
+    #endif
+    #if defined(WIFI_SSID_3) && !defined(WIFI_PWD_3)
+      #error "WIFI_PWD_3 must be defined when WIFI_SSID_3 is defined"
     #endif
   #elif defined(BLE_PIN_CODE)
     #include <helpers/esp32/SerialBLEInterface.h>
@@ -195,8 +202,57 @@ void setup() {
 
 #ifdef WIFI_SSID
   board.setInhibitSleep(true);   // prevent sleep when WiFi is active
-  WiFi.begin(WIFI_SSID, WIFI_PWD);
+  WiFi.mode(WIFI_STA);
+  WiFi.setSleep(false);
+
+  WiFiMulti wifi_multi;
+  int wifi_ap_count = 0;
+  wifi_multi.addAP(WIFI_SSID, WIFI_PWD);
+  wifi_ap_count++;
+
+  #ifdef WIFI_SSID_2
+    wifi_multi.addAP(WIFI_SSID_2, WIFI_PWD_2);
+    wifi_ap_count++;
+  #endif
+  #ifdef WIFI_SSID_3
+    wifi_multi.addAP(WIFI_SSID_3, WIFI_PWD_3);
+    wifi_ap_count++;
+  #endif
+
+  Serial.println();
+  Serial.println("[meshcore] WiFi companion mode");
+  Serial.printf("[meshcore] AP[1] SSID: %s\n", WIFI_SSID);
+  #ifdef WIFI_SSID_2
+    Serial.printf("[meshcore] AP[2] SSID: %s\n", WIFI_SSID_2);
+  #endif
+  #ifdef WIFI_SSID_3
+    Serial.printf("[meshcore] AP[3] SSID: %s\n", WIFI_SSID_3);
+  #endif
+  Serial.printf("[meshcore] AP count: %d\n", wifi_ap_count);
+  Serial.printf("[meshcore] TCP port: %d\n", TCP_PORT);
+  const uint32_t wifi_wait_ms = 20000;
+  const uint32_t wifi_step_ms = 250;
+  const uint32_t wifi_start_ms = millis();
+  wl_status_t wifi_status = WL_IDLE_STATUS;
+  while (WiFi.status() != WL_CONNECTED && (millis() - wifi_start_ms) < wifi_wait_ms) {
+    wifi_status = static_cast<wl_status_t>(wifi_multi.run());
+    if (wifi_status == WL_CONNECTED) {
+      break;
+    }
+    Serial.print(".");
+    delay(wifi_step_ms);
+  }
+  Serial.println();
+  wifi_status = WiFi.status();
+  if (wifi_status == WL_CONNECTED) {
+    const String joined_ssid = WiFi.SSID();
+    const String ip = WiFi.localIP().toString();
+    Serial.printf("[meshcore] WiFi connected to '%s', IP=%s RSSI=%d dBm\n", joined_ssid.c_str(), ip.c_str(), WiFi.RSSI());
+  } else {
+    Serial.printf("[meshcore] WiFi not connected yet (status=%d)\n", (int)wifi_status);
+  }
   serial_interface.begin(TCP_PORT);
+  Serial.printf("[meshcore] TCP server listening on %d\n", TCP_PORT);
 #elif defined(BLE_PIN_CODE)
   serial_interface.begin(BLE_NAME_PREFIX, the_mesh.getNodePrefs()->node_name, the_mesh.getBLEPin());
 #elif defined(SERIAL_RX)

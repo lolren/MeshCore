@@ -867,6 +867,13 @@ void MyMesh::begin(bool has_display) {
   _active_ble_pin = 0;
 #endif
 
+#ifdef BLE_PIN_CODE
+  if (_active_ble_pin != 0) {
+    // Print to UART so pairing still works if the display is unavailable.
+    Serial.printf("[BLE] Pairing passkey: %06lu\n", (unsigned long)_active_ble_pin);
+  }
+#endif
+
   resetContacts();
   _store->loadContacts(this);
   bootstrapRTCfromContacts();

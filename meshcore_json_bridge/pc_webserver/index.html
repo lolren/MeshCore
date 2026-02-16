@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MeshCore JSON Bridge</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --panel: #151b23;
+      --panel-2: #1b2330;
+      --text: #e6edf3;
+      --muted: #9fb1c3;
+      --ok: #1f9d64;
+      --err: #c7424f;
+      --accent: #2f81f7;
+      --border: #2d3748;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top right, #122038 0%, var(--bg) 50%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    .wrap {
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 18px;
+      display: grid;
+      gap: 14px;
+    }
+    .panel {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+      padding: 14px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 1.1rem;
+      letter-spacing: 0.02em;
+    }
+    .muted { color: var(--muted); }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.9rem;
+    }
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--err);
+      box-shadow: 0 0 12px rgba(199,66,79,0.7);
+    }
+    .dot.ok {
+      background: var(--ok);
+      box-shadow: 0 0 12px rgba(31,157,100,0.7);
+    }
+    .row {
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .field {
+      display: grid;
+      gap: 6px;
+      font-size: 0.9rem;
+    }
+    .c4 { grid-column: span 4; }
+    .c3 { grid-column: span 3; }
+    .c2 { grid-column: span 2; }
+    .c6 { grid-column: span 6; }
+    .c8 { grid-column: span 8; }
+    .c12 { grid-column: span 12; }
+    input, textarea, button {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font: inherit;
+      color: var(--text);
+      background: #0f1520;
+    }
+    textarea { min-height: 72px; resize: vertical; }
+    button {
+      background: #1f2a3b;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button.primary {
+      background: var(--accent);
+      border-color: #1f6ad1;
+      color: #fff;
+    }
+    .banner {
+      margin-top: 8px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: #182637;
+      border: 1px solid #24405e;
+      color: #b8d7ff;
+      min-height: 36px;
+      font-size: 0.9rem;
+    }
+    .banner.err {
+      background: #331a1d;
+      border-color: #6f2b35;
+      color: #ffc8ce;
+    }
+    .grid2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    .scroll {
+      max-height: 46vh;
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px;
+      background: #0e141f;
+    }
+    .msg {
+      border-bottom: 1px solid #1f2a3a;
+      padding: 8px 2px;
+      font-size: 0.9rem;
+    }
+    .msg:last-child { border-bottom: none; }
+    .head {
+      color: var(--muted);
+      font-size: 0.8rem;
+      margin-bottom: 3px;
+    }
+    .node {
+      border-bottom: 1px solid #1f2a3a;
+      padding: 8px 2px;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    .node:last-child { border-bottom: none; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    @media (max-width: 900px) {
+      .grid2 { grid-template-columns: 1fr; }
+      .c4, .c3, .c2, .c6, .c8 { grid-column: span 12; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="panel">
+      <h1>MeshCore JSON Bridge</h1>
+      <div class="muted">Meshtastic-like JSON API on top of MeshCore serial protocol.</div>
+      <div class="status" style="margin-top:8px;">
+        <span id="dot" class="dot"></span>
+        <span id="statusText">disconnected</span>
+      </div>
+      <div id="banner" class="banner">Ready.</div>
+    </section>
+
+    <section class="panel">
+      <div class="row">
+        <label class="field c4">
+          <span>Bridge Target</span>
+          <input id="serialPort" type="text" value="/dev/ttyUSB0" placeholder="/dev/ttyUSB0 or tcp://192.168.1.50:5000">
+        </label>
+        <label class="field c2">
+          <span>Baud</span>
+          <input id="baud" type="number" value="115200">
+        </label>
+        <div class="field c6">
+          <span>Actions</span>
+          <div class="actions">
+            <button id="saveCfg" class="primary" type="button">Save Bridge Config</button>
+            <button id="loadReport" type="button">Load Report</button>
+            <button id="loadNodes" type="button">Load Nodes</button>
+            <button id="loadMsgs" type="button">Poll Messages</button>
+          </div>
+        </div>
+      </div>
+      <div id="reportMeta" class="muted" style="margin-top:8px;">report: waiting...</div>
+      <div class="muted" style="margin-top:6px;">target examples: <code>/dev/ttyUSB0</code>, <code>192.168.1.50:5000</code>, <code>tcp://192.168.1.50:5000</code></div>
+    </section>
+
+    <section class="panel">
+      <div class="row">
+        <label class="field c6">
+          <span>Node Long Name</span>
+          <input id="longName" type="text" maxlength="31" placeholder="MeshCore Node">
+        </label>
+        <label class="field c3">
+          <span>Node Short Name</span>
+          <input id="shortName" type="text" maxlength="4" placeholder="MC01">
+        </label>
+        <div class="field c3">
+          <span>&nbsp;</span>
+          <button id="saveNode" type="button">Save Node Name</button>
+        </div>
+      </div>
+      <div id="nodeCfgMeta" class="muted" style="margin-top:8px;">node config: waiting...</div>
+    </section>
+
+    <section class="panel">
+      <div class="row">
+        <label class="field c8">
+          <span>Message</span>
+          <textarea id="msgText" placeholder="Type text message"></textarea>
+        </label>
+        <label class="field c2">
+          <span>Channel</span>
+          <input id="channel" type="number" min="0" max="7" value="0">
+        </label>
+        <label class="field c2">
+          <span>Private To (!hex12)</span>
+          <input id="to" type="text" placeholder="optional, ex !a1b2c3d4e5f6">
+        </label>
+        <div class="field c12">
+          <div class="actions">
+            <button id="sendChannel" class="primary" type="button">Send Channel</button>
+            <button id="sendPrivate" type="button">Send Private</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="row">
+        <label class="field c2">
+          <span>Limit</span>
+          <input id="limit" type="number" min="1" max="100" value="60">
+        </label>
+        <label class="field c2">
+          <span>Peer Filter</span>
+          <input id="peer" type="text" placeholder="!hex12">
+        </label>
+        <label class="field c2">
+          <span>Channel Filter</span>
+          <input id="msgChannel" type="number" min="0" max="7" placeholder="optional">
+        </label>
+        <label class="field c2">
+          <span>Include Broadcast</span>
+          <input id="incBroadcast" type="checkbox" checked>
+        </label>
+        <label class="field c2">
+          <span>Include DM</span>
+          <input id="incDm" type="checkbox" checked>
+        </label>
+        <label class="field c2">
+          <span>Auto Poll (4s)</span>
+          <input id="autoPoll" type="checkbox" checked>
+        </label>
+      </div>
+    </section>
+
+    <section class="grid2">
+      <article class="panel">
+        <h1>Nodes</h1>
+        <div id="nodeCount" class="muted">nodes: 0</div>
+        <div id="nodes" class="scroll"></div>
+      </article>
+      <article class="panel">
+        <h1>Messages</h1>
+        <div id="msgCount" class="muted">messages: 0</div>
+        <div id="messages" class="scroll"></div>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    const dot = document.getElementById("dot");
+    const statusText = document.getElementById("statusText");
+    const banner = document.getElementById("banner");
+    const messagesEl = document.getElementById("messages");
+    const nodesEl = document.getElementById("nodes");
+
+    const state = {
+      seen: new Set(),
+      nodeNames: new Map()
+    };
+
+    function setStatus(ok, text) {
+      dot.classList.toggle("ok", !!ok);
+      statusText.textContent = text;
+    }
+
+    function setBanner(text, isErr = false) {
+      banner.textContent = text;
+      banner.classList.toggle("err", !!isErr);
+    }
+
+    async function fetchJson(url, options = {}) {
+      const opts = { ...options };
+      opts.headers = opts.headers || {};
+      if (opts.body && !opts.headers["Content-Type"]) {
+        opts.headers["Content-Type"] = "application/json";
+      }
+
+      const res = await fetch(url, opts);
+      const raw = await res.text();
+      let body = {};
+      try {
+        body = raw ? JSON.parse(raw) : {};
+      } catch (_e) {
+        body = { status: "error", error: "invalid_json_response", detail: raw.slice(0, 300) };
+      }
+      return { res, body };
+    }
+
+    function nodeLabel(node) {
+      const n = node.long_name || node.short_name || node.id || "?";
+      return `${n} (${node.id || "?"})`;
+    }
+
+    function appendMessage(msg) {
+      const key = [msg.timestamp, msg.scope, msg.sender_id, msg.peer_id, msg.channel, msg.text].join("|");
+      if (state.seen.has(key)) {
+        return;
+      }
+      state.seen.add(key);
+
+      const row = document.createElement("div");
+      row.className = "msg";
+      const head = document.createElement("div");
+      head.className = "head";
+      head.textContent = `${new Date((msg.timestamp || 0) * 1000).toLocaleString()} | ${msg.scope} | ${msg.direction} | ch:${msg.channel} | from:${msg.sender_id || "?"} | to:${msg.to_id || "?"}`;
+      const txt = document.createElement("div");
+      txt.textContent = msg.text || "";
+      row.appendChild(head);
+      row.appendChild(txt);
+      messagesEl.appendChild(row);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    async function loadConfig() {
+      const { res, body } = await fetchJson("/api/config", { cache: "no-store" });
+      if (!res.ok || body.status !== "ok") {
+        setStatus(false, "disconnected");
+        setBanner(`load config failed: ${body.error || res.status}`, true);
+        return false;
+      }
+
+      const target = body.target || body.serial_port || body.esp_base_url || "/dev/ttyUSB0";
+      document.getElementById("serialPort").value = String(target);
+      document.getElementById("baud").value = String(body.baud || 115200);
+      setStatus(!!body.connected, body.connected ? "connected" : "configured");
+      setBanner(`config loaded: ${target} @ ${body.baud || 115200}`);
+      return true;
+    }
+
+    async function saveConfig() {
+      const serial_port = document.getElementById("serialPort").value.trim();
+      const baud = Number(document.getElementById("baud").value || 115200);
+
+      const { res, body } = await fetchJson("/api/config", {
+        method: "POST",
+        body: JSON.stringify({ serial_port, baud })
+      });
+
+      if (!res.ok || body.status !== "ok") {
+        setStatus(false, "disconnected");
+        setBanner(`config failed: ${body.error || res.status}`, true);
+        return;
+      }
+
+      setStatus(!!body.connected, body.connected ? "connected" : "configured");
+      setBanner(`bridge config saved: ${body.target || body.serial_port} @ ${body.baud}`);
+      await loadReport();
+      await loadNodeConfig();
+      await loadNodes();
+      await loadMessages();
+    }
+
+    async function loadReport() {
+      const { res, body } = await fetchJson("/api/report", { cache: "no-store" });
+      if (!res.ok || body.status !== "ok") {
+        setStatus(false, "report error");
+        setBanner(`report failed: ${body.error || res.status}`, true);
+        return;
+      }
+
+      const d = body.data || {};
+      const radio = d.radio || {};
+      document.getElementById("reportMeta").textContent =
+        `fw:${(d.device && d.device.firmware_version) || "?"} | model:${(d.device && d.device.hw_model) || "?"} | freq:${radio.freq_mhz ?? "?"}MHz bw:${radio.bw_khz ?? "?"}kHz sf:${radio.sf ?? "?"} cr:${radio.cr ?? "?"}`;
+      setStatus(true, "connected");
+    }
+
+    async function loadNodeConfig() {
+      const { res, body } = await fetchJson("/api/node-config", { cache: "no-store" });
+      if (!res.ok || body.status !== "ok") {
+        setBanner(`node config failed: ${body.error || res.status}`, true);
+        return;
+      }
+
+      const owner = (body.data && body.data.owner) || {};
+      document.getElementById("longName").value = owner.long_name || "";
+      document.getElementById("shortName").value = owner.short_name || "";
+      document.getElementById("nodeCfgMeta").textContent = `node id:${owner.id || "?"} name:${owner.long_name || "?"}`;
+    }
+
+    async function saveNodeConfig() {
+      const longName = document.getElementById("longName").value;
+      const shortName = document.getElementById("shortName").value;
+
+      const { res, body } = await fetchJson("/api/node-config", {
+        method: "POST",
+        body: JSON.stringify({ longName, shortName, reboot: false })
+      });
+
+      if (!res.ok || body.status !== "ok") {
+        setBanner(`save node failed: ${body.error || res.status}`, true);
+        return;
+      }
+
+      setBanner("node config saved");
+      await loadNodeConfig();
+    }
+
+    async function loadNodes() {
+      const { res, body } = await fetchJson("/api/nodes?content=json", { cache: "no-store" });
+      if (!res.ok || body.status !== "ok") {
+        setBanner(`nodes failed: ${body.error || res.status}`, true);
+        return;
+      }
+
+      const nodes = (body.data && Array.isArray(body.data.nodes)) ? body.data.nodes : [];
+      state.nodeNames = new Map();
+
+      nodesEl.innerHTML = "";
+      for (const node of nodes) {
+        if (node.id) {
+          state.nodeNames.set(String(node.id).toLowerCase(), node.long_name || node.short_name || node.id);
+        }
+
+        const row = document.createElement("div");
+        row.className = "node";
+        row.textContent = nodeLabel(node);
+        row.addEventListener("click", () => {
+          document.getElementById("to").value = node.id || "";
+        });
+        nodesEl.appendChild(row);
+      }
+
+      document.getElementById("nodeCount").textContent = `nodes: ${nodes.length}`;
+    }
+
+    async function loadMessages() {
+      const params = new URLSearchParams();
+      params.set("limit", String(Number(document.getElementById("limit").value || 60)));
+      params.set("includeBroadcast", String(document.getElementById("incBroadcast").checked));
+      params.set("includeDm", String(document.getElementById("incDm").checked));
+
+      const peer = document.getElementById("peer").value.trim();
+      if (peer) {
+        params.set("peer", peer);
+      }
+
+      const channel = document.getElementById("msgChannel").value.trim();
+      if (channel !== "") {
+        params.set("channel", channel);
+      }
+
+      const { res, body } = await fetchJson(`/api/messages?${params.toString()}`, { cache: "no-store" });
+      if (!res.ok || body.status !== "ok") {
+        setBanner(`messages failed: ${body.error || res.status}`, true);
+        return;
+      }
+
+      const msgs = (body.data && Array.isArray(body.data.messages)) ? body.data.messages : [];
+      for (const m of msgs) {
+        appendMessage(m);
+      }
+
+      document.getElementById("msgCount").textContent = `messages: ${messagesEl.children.length}`;
+    }
+
+    async function sendMessage(privateMode) {
+      const text = document.getElementById("msgText").value.trim();
+      if (!text) {
+        setBanner("message text is empty", true);
+        return;
+      }
+
+      const payload = { text };
+      if (privateMode) {
+        const to = document.getElementById("to").value.trim();
+        if (!to) {
+          setBanner("private recipient is required", true);
+          return;
+        }
+        payload.to = to;
+      } else {
+        payload.channel = Number(document.getElementById("channel").value || 0);
+      }
+
+      const { res, body } = await fetchJson("/api/send", {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok || body.status !== "ok") {
+        setBanner(`send failed: ${body.error || res.status}`, true);
+        return;
+      }
+
+      setBanner(`send ok (${body.data && body.data.mode ? body.data.mode : "unknown"})`);
+      await loadMessages();
+    }
+
+    document.getElementById("saveCfg").addEventListener("click", saveConfig);
+    document.getElementById("loadReport").addEventListener("click", loadReport);
+    document.getElementById("loadNodes").addEventListener("click", loadNodes);
+    document.getElementById("loadMsgs").addEventListener("click", loadMessages);
+    document.getElementById("saveNode").addEventListener("click", saveNodeConfig);
+    document.getElementById("sendChannel").addEventListener("click", () => sendMessage(false));
+    document.getElementById("sendPrivate").addEventListener("click", () => sendMessage(true));
+
+    setInterval(async () => {
+      if (!document.getElementById("autoPoll").checked) {
+        return;
+      }
+      await loadMessages();
+    }, 4000);
+
+    (async () => {
+      const loaded = await loadConfig();
+      if (!loaded) {
+        return;
+      }
+      await loadReport();
+      await loadNodeConfig();
+      await loadNodes();
+      await loadMessages();
+    })();
+  </script>
+</body>
+</html>
